@@ -82,7 +82,7 @@ Credits
 -------
 
 HIPSocialAuth is brought to you by 
-[Taylan Pince](http://taylanpince.com) and the [Hipo Team](http://hipo.biz).
+[Taylan Pince](http://taylanpince.com) and the [Hipo Team](http://hipolabs.com).
 
 
 License
