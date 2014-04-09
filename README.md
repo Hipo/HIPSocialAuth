@@ -45,17 +45,10 @@ And that's it! Completion block is called with an `HIPSocialAccount` instance th
 Installation
 ------------
 
-Copy and include the `HIPSocialAuth` directory (found here under Dependencies) in your own project. There are some other dependencies as well, you can see their details below under Requirements.
-
-If your project uses ARC, you will have to mark the following files to be 
-compiled without ARC, using the `-fno-objc-arc` flag in build settings:
-
-* NSData+Base64.m
-* OAuth+Additions.m
-* OAuthCore.m
+Copy and include the `HIPSocialAuth` directory in your own project. There are some other dependencies as well, you can see their details below.
 
 
-Requirements
+Dependencies
 ------------
 
 Project comes bundled with the following dependencies:

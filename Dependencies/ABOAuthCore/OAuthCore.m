@@ -10,17 +10,6 @@
 #import "NSData+Base64.h"
 #import <CommonCrypto/CommonHMAC.h>
 
-static NSInteger SortParameter(NSString *key1, NSString *key2, void *context) {
-    NSComparisonResult r = [key1 compare:key2];
-    if(r == NSOrderedSame) { // compare by value in this case
-        NSDictionary *dict = (NSDictionary *)context;
-        NSString *value1 = [dict objectForKey:key1];
-        NSString *value2 = [dict objectForKey:key2];
-        return [value1 compare:value2];
-    }
-    return r;
-}
-
 static NSData *HMAC_SHA1(NSString *data, NSString *key) {
     unsigned char buf[CC_SHA1_DIGEST_LENGTH];
     CCHmac(kCCHmacAlgSHA1, [key UTF8String], [key length], [data UTF8String], [data length], buf);
@@ -47,14 +36,14 @@ NSString *OAuthorizationHeader(NSURL *url, NSString *method, NSData *body, NSStr
     NSDictionary *additionalQueryParameters = [NSURL ab_parseURLQueryString:[url query]];
     NSDictionary *additionalBodyParameters = nil;
     if(body) {
-        NSString *string = [[[NSString alloc] initWithData:body encoding:NSUTF8StringEncoding] autorelease];
+        NSString *string = [[NSString alloc] initWithData:body encoding:NSUTF8StringEncoding];
         if(string) {
             additionalBodyParameters = [NSURL ab_parseURLQueryString:string];
         }
     }
 
     // combine all parameters
-    NSMutableDictionary *parameters = [[oAuthAuthorizationParameters mutableCopy] autorelease];
+    NSMutableDictionary *parameters = [oAuthAuthorizationParameters mutableCopy];
     if(additionalQueryParameters) [parameters addEntriesFromDictionary:additionalQueryParameters];
     if(additionalBodyParameters) [parameters addEntriesFromDictionary:additionalBodyParameters];
 
@@ -65,7 +54,15 @@ NSString *OAuthorizationHeader(NSURL *url, NSString *method, NSData *body, NSStr
         [encodedParameters setObject:[value ab_RFC3986EncodedString] forKey:[key ab_RFC3986EncodedString]];
     }
 
-    NSArray *sortedKeys = [[encodedParameters allKeys] sortedArrayUsingFunction:SortParameter context:encodedParameters];
+    NSArray *sortedKeys = [[encodedParameters allKeys] sortedArrayUsingComparator:^NSComparisonResult(id obj1, id obj2) {
+		NSComparisonResult r = [obj1 compare:obj2];
+		if (r == NSOrderedSame) {
+			NSString *value1 = [encodedParameters objectForKey:obj1];
+			NSString *value2 = [encodedParameters objectForKey:obj2];
+			return [value1 compare:value2];
+		}
+		return r;
+	}];
 
     NSMutableArray *parameterArray = [NSMutableArray array];
     for(NSString *key in sortedKeys) {
@@ -88,7 +85,7 @@ NSString *OAuthorizationHeader(NSURL *url, NSString *method, NSData *body, NSStr
     NSData *signature = HMAC_SHA1(signatureBaseString, key);
     NSString *base64Signature = [signature base64EncodedString];
 
-    NSMutableDictionary *authorizationHeaderDictionary = [[oAuthAuthorizationParameters mutableCopy] autorelease];
+    NSMutableDictionary *authorizationHeaderDictionary = [oAuthAuthorizationParameters mutableCopy];
     [authorizationHeaderDictionary setObject:base64Signature forKey:@"oauth_signature"];
 
     NSMutableArray *authorizationHeaderItems = [NSMutableArray array];
