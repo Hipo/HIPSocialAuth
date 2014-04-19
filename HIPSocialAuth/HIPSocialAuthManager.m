@@ -551,6 +551,10 @@ static NSString * const HIPSocialAuthTwitterUsernameKey = @"twitterUsername";
                 _authHandler(account, profileInfo, nil);
                 break;
             }
+            case HIPSocialAuthErrorNoAccountFound:{
+                [self openFacebookSession];
+                break;
+            }
             default: {
                 _authHandler(account, profileInfo, [NSError errorWithDomain:HIPSocialAuthErrorDomain
                                                                        code:error
