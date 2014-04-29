@@ -549,6 +549,7 @@ static NSString * const HIPSocialAuthTwitterUsernameKey = @"twitterUsername";
         switch (error) {
             case HIPSocialAuthErrorNone: {
                 _authHandler(account, profileInfo, nil);
+                _authHandler = nil;
                 break;
             }
             case HIPSocialAuthErrorNoAccountFound:{
@@ -559,11 +560,10 @@ static NSString * const HIPSocialAuthTwitterUsernameKey = @"twitterUsername";
                 _authHandler(account, profileInfo, [NSError errorWithDomain:HIPSocialAuthErrorDomain
                                                                        code:error
                                                                    userInfo:nil]);
+                _authHandler = nil;
                 break;
             }
         }
-        
-        _authHandler = nil;
     };
     
     dispatch_async(dispatch_get_main_queue(), completionBlock);
