@@ -194,7 +194,11 @@ static NSString * const HIPSocialAuthTwitterUsernameKey = @"twitterUsername";
             HIPSocialAuthError errorCode = HIPSocialAuthErrorAccessNotGranted;
             
             if (error != nil && [error code] == ACErrorAccountNotFound) {
-                errorCode = HIPSocialAuthErrorNoAccountFound;
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [self openFacebookSession];
+                });
+                
+                return;
             }
             
             [self completeAuthProcessWithAccount:nil
