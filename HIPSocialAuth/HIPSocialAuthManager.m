@@ -252,7 +252,8 @@ static NSString * const HIPSocialAuthTwitterUsernameKey = @"twitterUsername";
     
     [FBSession setActiveSession:session];
     
-    [[FBSession activeSession] openWithCompletionHandler:^(FBSession *session, FBSessionState status, NSError *error) {
+    [[FBSession activeSession] openWithBehavior:FBSessionLoginBehaviorUseSystemAccountIfPresent
+                              completionHandler:^(FBSession *session, FBSessionState status, NSError *error) {
         switch (status) {
             case FBSessionStateClosed:
                 if (_facebookAutoLoginInProgress) {
