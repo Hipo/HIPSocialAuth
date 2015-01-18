@@ -1,9 +1,8 @@
 //
 //  HIPSocialAccount.m
-//  Chroma
 //
 //  Created by Taylan Pince on 2013-07-18.
-//  Copyright (c) 2013 Change Theory. All rights reserved.
+//  Copyright (c) 2013 Hipo. All rights reserved.
 //
 
 #import "HIPSocialAccount.h"

@@ -1,9 +1,8 @@
 //
 //  HIPSocialAuthManager.m
-//  Chroma
 //
 //  Created by Taylan Pince on 2013-07-18.
-//  Copyright (c) 2013 Change Theory. All rights reserved.
+//  Copyright (c) 2013 Hipo. All rights reserved.
 //
 
 #import "TWAPIManager.h"
@@ -179,12 +178,18 @@ static NSString * const HIPSocialAuthTwitterUsernameKey = @"twitterUsername";
 #pragma mark - Facebook login
 
 - (void)authenticateFacebookAccount {
-    if ([[FBSession activeSession] isOpen] && [self hasAuthenticatedAccountOfType:HIPSocialAccountTypeFacebook]) {
-        _facebookAutoLoginInProgress = YES;
-        
-        [self fetchDetailsForFacebookAccountAndRetryOnError:YES];
-        
-        return;
+    if ([self hasAuthenticatedAccountOfType:HIPSocialAccountTypeFacebook]) {
+        if ([[FBSession activeSession] isOpen]) {
+            _facebookAutoLoginInProgress = YES;
+            
+            [self fetchDetailsForFacebookAccountAndRetryOnError:YES];
+            
+            return;
+        } else if ([[FBSession activeSession] state] == FBSessionStateCreatedTokenLoaded) {
+            [self openFacebookSession];
+            
+            return;
+        }
     }
     
     _facebookAutoLoginInProgress = NO;
@@ -252,11 +257,13 @@ static NSString * const HIPSocialAuthTwitterUsernameKey = @"twitterUsername";
     
     [FBSession setActiveSession:session];
     
-    [[FBSession activeSession] openWithBehavior:FBSessionLoginBehaviorUseSystemAccountIfPresent
-                              completionHandler:^(FBSession *session, FBSessionState status, NSError *error) {
+    [[FBSession activeSession]
+     openWithBehavior:FBSessionLoginBehaviorUseSystemAccountIfPresent
+     completionHandler:^(FBSession *session, FBSessionState status, NSError *error) {
         switch (status) {
             case FBSessionStateClosed:
                 if (_facebookAutoLoginInProgress) {
+                    _facebookAutoLoginInProgress = NO;
                     return;
                 }
 
@@ -278,6 +285,8 @@ static NSString * const HIPSocialAuthTwitterUsernameKey = @"twitterUsername";
             default:
                 break;
         }
+         
+        _facebookAutoLoginInProgress = NO;
         
         if (_authHandler == nil) {
             return;

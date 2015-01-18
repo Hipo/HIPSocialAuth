@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name         = "HIPSocialAuth"
-  s.version      = "1.0.0"
+  s.version      = "1.0.1"
   s.summary      = "iOS7 framework for handling Facebook and Twitter authentication, with reverse-auth support."
   s.homepage     = "https://github.com/Hipo/HIPSocialAuth"
   s.license      = { :type => 'Apache', :file => 'LICENSE' }
