@@ -5,8 +5,7 @@
 //  Copyright (c) 2013 Hipo. All rights reserved.
 //
 
-#import "TWAPIManager.h"
-#import "NSData+Base64.h"
+#import <TwitterKit/TwitterKit.h>
 
 #import "HIPSocialAuthManager.h"
 
@@ -18,21 +17,18 @@ static NSString * const HIPSocialAuthTwitterSecretKey = @"twitterSecret";
 static NSString * const HIPSocialAuthTwitterUsernameKey = @"twitterUsername";
 
 
-@interface HIPSocialAuthManager () <UIActionSheetDelegate>
+@interface HIPSocialAuthManager ()
 
 @property (nonatomic, copy) NSString *facebookAppID;
 @property (nonatomic, copy) NSArray *facebookPermissions;
 @property (nonatomic, retain) ACAccountStore *accountStore;
-@property (nonatomic, retain) TWAPIManager *twitterManager;
 @property (nonatomic, copy) HIPSocialAuthHandler authHandler;
 @property (nonatomic, assign) BOOL facebookAutoLoginInProgress;
 
 - (void)authenticateFacebookAccount;
 - (void)authenticateTwitterAccount;
 
-- (void)checkSystemTwitterAccountsAgainstUsername:(NSString *)username;
-- (void)generateTokenForTwitterAccount:(ACAccount *)twitterAccount;
-- (void)fetchDetailsForTwitterAccount:(ACAccount *)twitterAccount;
+- (void)fetchDetailsForTwitterSession;
 
 - (void)openFacebookSession;
 - (void)fetchDetailsForFacebookAccountAndRetryOnError:(BOOL)retryOnError;
@@ -87,7 +83,7 @@ static NSString * const HIPSocialAuthTwitterUsernameKey = @"twitterUsername";
             twitterConsumerKey:(NSString *)twitterConsumerKey
          twitterConsumerSecret:(NSString *)twitterConsumerSecret {
     
-    if (_facebookAppID != nil || _twitterManager != nil) {
+    if (_facebookAppID != nil || _accountStore != nil) {
         return;
     }
     
@@ -99,17 +95,13 @@ static NSString * const HIPSocialAuthTwitterUsernameKey = @"twitterUsername";
     
     _authHandler = nil;
     _accountStore = [[ACAccountStore alloc] init];
-    _twitterManager = [[TWAPIManager alloc] init];
-    
-    [_twitterManager setConsumerKey:twitterConsumerKey];
-    [_twitterManager setConsumerSecret:twitterConsumerSecret];
     
     if ([self hasAuthenticatedAccountOfType:HIPSocialAccountTypeFacebook]) {
         [self authenticateFacebookAccount];
     }
-    
+
     if (self.twitterToken != nil && self.twitterTokenSecret != nil && self.twitterUsername != nil) {
-        [self checkSystemTwitterAccountsAgainstUsername:self.twitterUsername];
+        [self authenticateTwitterAccount];
     }
 }
 
@@ -126,7 +118,7 @@ static NSString * const HIPSocialAuthTwitterUsernameKey = @"twitterUsername";
             break;
         }
         case HIPSocialAccountTypeTwitter: {
-            return (_twitterAccount != nil);
+            return (_twitterSession != nil);
             
             break;
         }
@@ -141,6 +133,7 @@ static NSString * const HIPSocialAuthTwitterUsernameKey = @"twitterUsername";
 
 - (void)authenticateAccountOfType:(HIPSocialAccountType)accountType
                       withHandler:(HIPSocialAuthHandler)handler {
+
     if (accountType == HIPSocialAccountTypeUnknown) {
         handler(nil, nil, [NSError errorWithDomain:HIPSocialAuthErrorDomain
                                               code:HIPSocialAuthErrorUnknownServiceType
@@ -217,7 +210,7 @@ static NSString * const HIPSocialAuthTwitterUsernameKey = @"twitterUsername";
             if ([error code] == ACErrorAccountNotFound) {
                 errorCode = HIPSocialAuthErrorNoAccountFound;
             }
-
+            
             [self completeAuthProcessWithAccount:nil
                                      profileInfo:nil
                                            error:errorCode];
@@ -260,49 +253,49 @@ static NSString * const HIPSocialAuthTwitterUsernameKey = @"twitterUsername";
     [[FBSession activeSession]
      openWithBehavior:FBSessionLoginBehaviorUseSystemAccountIfPresent
      completionHandler:^(FBSession *session, FBSessionState status, NSError *error) {
-        switch (status) {
-            case FBSessionStateClosed:
-                if (_facebookAutoLoginInProgress) {
-                    _facebookAutoLoginInProgress = NO;
-                    return;
-                }
-
-                break;
-            case FBSessionStateClosedLoginFailed: {
-                [FBSession.activeSession closeAndClearTokenInformation];
-                break;
-            }
-            case FBSessionStateCreated:
-                break;
-            case FBSessionStateCreatedOpening:
-                break;
-            case FBSessionStateCreatedTokenLoaded:
-                break;
-            case FBSessionStateOpen:
-                break;
-            case FBSessionStateOpenTokenExtended:
-                break;
-            default:
-                break;
-        }
+         switch (status) {
+             case FBSessionStateClosed:
+                 if (_facebookAutoLoginInProgress) {
+                     _facebookAutoLoginInProgress = NO;
+                     return;
+                 }
+                 
+                 break;
+             case FBSessionStateClosedLoginFailed: {
+                 [FBSession.activeSession closeAndClearTokenInformation];
+                 break;
+             }
+             case FBSessionStateCreated:
+                 break;
+             case FBSessionStateCreatedOpening:
+                 break;
+             case FBSessionStateCreatedTokenLoaded:
+                 break;
+             case FBSessionStateOpen:
+                 break;
+             case FBSessionStateOpenTokenExtended:
+                 break;
+             default:
+                 break;
+         }
          
-        _facebookAutoLoginInProgress = NO;
-        
-        if (_authHandler == nil) {
-            return;
-        }
-        
-        if (status != FBSessionStateOpen && status != FBSessionStateOpenTokenExtended) {
-            
-            [self completeAuthProcessWithAccount:nil
-                                     profileInfo:nil
-                                           error:HIPSocialAuthErrorAuthenticationFailed];
-            
-            return;
-        }
-        
-        [self fetchDetailsForFacebookAccountAndRetryOnError:NO];
-    }];
+         _facebookAutoLoginInProgress = NO;
+         
+         if (_authHandler == nil) {
+             return;
+         }
+         
+         if (status != FBSessionStateOpen && status != FBSessionStateOpenTokenExtended) {
+             
+             [self completeAuthProcessWithAccount:nil
+                                      profileInfo:nil
+                                            error:HIPSocialAuthErrorAuthenticationFailed];
+             
+             return;
+         }
+         
+         [self fetchDetailsForFacebookAccountAndRetryOnError:NO];
+     }];
 }
 
 - (void)fetchDetailsForFacebookAccountAndRetryOnError:(BOOL)retryOnError {
@@ -327,202 +320,19 @@ static NSString * const HIPSocialAuthTwitterUsernameKey = @"twitterUsername";
 #pragma mark - Twitter login
 
 - (void)authenticateTwitterAccount {
-    // Request access to Twitter accounts, once permission is given, check available accounts
-    // If there is more than one, display picker interface, or if there is only one, move on
-    // Once an account is selected, fetch profile by using the verify endpoint
-    // Then call the authHandler block with the STAccount instance
     
-    ACAccountType *twitterAccountType = [_accountStore accountTypeWithAccountTypeIdentifier:
-                                         ACAccountTypeIdentifierTwitter];
-    
-    ACAccountStoreRequestAccessCompletionHandler completionHandler = ^(BOOL granted, NSError *error) {
-        if (!granted) {
-            HIPSocialAuthError errorCode = HIPSocialAuthErrorAccessNotGranted;
+    [[Twitter sharedInstance] logInWithCompletion:^(TWTRSession *session, NSError *error) {
+        if (session) {
+            _twitterSession = session;
             
-            if (error != nil && [error code] == ACErrorAccountNotFound) {
-                errorCode = HIPSocialAuthErrorNoAccountFound;
-            }
-            
-            [self completeAuthProcessWithAccount:nil
-                                     profileInfo:nil
-                                           error:errorCode];
-            
-            return;
-        } else if (error != nil) {
-            HIPSocialAuthError errorCode = HIPSocialAuthErrorAuthenticationFailed;
-            
-            if ([error code] == ACErrorAccountNotFound) {
-                errorCode = HIPSocialAuthErrorNoAccountFound;
-            }
-            
-            [self completeAuthProcessWithAccount:nil
-                                     profileInfo:nil
-                                           error:errorCode];
-            
-            return;
-        }
-        
-        dispatch_block_t completionBlock = ^{
-            [self checkSystemTwitterAccountsAgainstUsername:self.twitterUsername];
-        };
-        
-        dispatch_async(dispatch_get_main_queue(), completionBlock);
-    };
-    
-    [_accountStore requestAccessToAccountsWithType:twitterAccountType
-                                           options:nil
-                                        completion:completionHandler];
-}
+            NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
 
-- (void)checkSystemTwitterAccountsAgainstUsername:(NSString *)username {
-    ACAccountType *twitterAccountType = [_accountStore accountTypeWithAccountTypeIdentifier:
-                                         ACAccountTypeIdentifierTwitter];
-    
-    NSArray *systemTwitterAccounts = [_accountStore accountsWithAccountType:twitterAccountType];
-    
-    if (systemTwitterAccounts == nil || [systemTwitterAccounts count] == 0) {
-        if (_authHandler != nil) {
-            [self completeAuthProcessWithAccount:nil
-                                     profileInfo:nil
-                                           error:HIPSocialAuthErrorNoAccountFound];
-        }
-        
-        return;
-    }
-    
-    if (username != nil) {
-        for (ACAccount *systemTwitterAccount in systemTwitterAccounts) {
-            if (systemTwitterAccount.username != nil) {
-                if ([username isEqualToString:systemTwitterAccount.username]) {
-                    _twitterAccount = systemTwitterAccount;
-                    
-                    if (_authHandler != nil) {
-                        [self fetchDetailsForTwitterAccount:systemTwitterAccount];
-                    }
-                    
-                    return;
-                }
-            }
-        }
-    }
-    
-    if ([systemTwitterAccounts count] == 1) {
-        [self generateTokenForTwitterAccount:[systemTwitterAccounts objectAtIndex:0]];
-    } else {
-        dispatch_block_t completionBlock = ^{
-            UIActionSheet *actionSheet = [[UIActionSheet alloc]
-                                          initWithTitle:NSLocalizedString(@"Select an account", nil)
-                                          delegate:self
-                                          cancelButtonTitle:nil
-                                          destructiveButtonTitle:nil
-                                          otherButtonTitles:nil];
-            
-            for (ACAccount *systemTwitterAccount in systemTwitterAccounts) {
-                [actionSheet addButtonWithTitle:systemTwitterAccount.accountDescription];
-            }
-            
-            [actionSheet addButtonWithTitle:NSLocalizedString(@"Nevermind", nil)];
-            [actionSheet setCancelButtonIndex:[systemTwitterAccounts count]];
-            
-            UIWindow *mainWindow = [[UIApplication sharedApplication] keyWindow];
-            UIViewController *parentController = mainWindow.rootViewController;
-            UIViewController *modalController = parentController.presentedViewController;
-            
-            while (modalController != nil) {
-                parentController = modalController;
-                modalController = parentController.presentedViewController;
-            }
-            
-            if (parentController != nil) {
-                [actionSheet showInView:parentController.view];
-            } else {
-                [actionSheet showInView:mainWindow];
-            }
-        };
-        
-        dispatch_async(dispatch_get_main_queue(), completionBlock);
-    }
-}
+            [prefs setObject:_twitterSession.authToken forKey:HIPSocialAuthTwitterTokenKey];
+            [prefs setObject:_twitterSession.authTokenSecret forKey:HIPSocialAuthTwitterSecretKey];
+            [prefs setObject:_twitterSession.userName forKey:HIPSocialAuthTwitterUsernameKey];
+            [prefs synchronize];
 
-- (void)generateTokenForTwitterAccount:(ACAccount *)twitterAccount {
-    [_twitterManager
-     performReverseAuthForAccount:twitterAccount
-     withHandler:^(NSData *responseData, NSError *error) {
-         if (error != nil) {
-             [self completeAuthProcessWithAccount:nil
-                                      profileInfo:nil
-                                            error:HIPSocialAuthErrorAuthenticationFailed];
-             
-             return;
-         }
-         
-         NSString *response = [[NSString alloc]
-                               initWithData:responseData
-                               encoding:NSUTF8StringEncoding];
-         
-         NSArray *components = [response componentsSeparatedByString:@"&"];
-         NSString *token = nil;
-         NSString *tokenSecret = nil;
-         
-         for (NSString *component in components) {
-             NSArray *parts = [component componentsSeparatedByString:@"="];
-             
-             if ([[parts objectAtIndex:0] isEqualToString:@"oauth_token"]) {
-                 token = [parts objectAtIndex:1];
-             } else if ([[parts objectAtIndex:0] isEqualToString:@"oauth_token_secret"]) {
-                 tokenSecret = [parts objectAtIndex:1];
-             }
-         }
-         
-         if (token == nil || tokenSecret == nil) {
-             [self completeAuthProcessWithAccount:nil
-                                      profileInfo:nil
-                                            error:HIPSocialAuthErrorAuthenticationFailed];
-             
-             return;
-         }
-         
-         NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
-         
-         [prefs setObject:token forKey:HIPSocialAuthTwitterTokenKey];
-         [prefs setObject:tokenSecret forKey:HIPSocialAuthTwitterSecretKey];
-         [prefs setObject:twitterAccount.username forKey:HIPSocialAuthTwitterUsernameKey];
-         [prefs synchronize];
-         
-         [self fetchDetailsForTwitterAccount:twitterAccount];
-     }];
-}
-
-- (void)fetchDetailsForTwitterAccount:(ACAccount *)twitterAccount {
-    SLRequest *request = [SLRequest requestForServiceType:SLServiceTypeTwitter
-                                            requestMethod:SLRequestMethodGET
-                                                      URL:[NSURL URLWithString:HIPSocialAuthTwitterVerifyURL]
-                                               parameters:nil];
-    
-    [request setAccount:twitterAccount];
-    [request performRequestWithHandler:^(NSData *responseData, NSHTTPURLResponse *urlResponse, NSError *error) {
-        if ([urlResponse statusCode] != 200) {
-            [self completeAuthProcessWithAccount:nil
-                                     profileInfo:nil
-                                           error:HIPSocialAuthErrorAuthenticationFailed];
-            
-            return;
-        }
-        
-        NSError *parseError = nil;
-        NSDictionary *userInfo = [NSJSONSerialization JSONObjectWithData:responseData
-                                                                 options:0
-                                                                   error:&parseError];
-        
-        if (parseError == nil) {
-            _twitterAccount = twitterAccount;
-            
-            HIPSocialAccount *account = [HIPSocialAccount accountWithType:HIPSocialAccountTypeTwitter
-                                                               identifier:[userInfo valueForKey:@"id_str"]];
-            
-            [self completeAuthProcessWithAccount:account
-                                     profileInfo:userInfo
-                                           error:HIPSocialAuthErrorNone];
+            [self fetchDetailsForTwitterSession];
         } else {
             [self completeAuthProcessWithAccount:nil
                                      profileInfo:nil
@@ -531,23 +341,31 @@ static NSString * const HIPSocialAuthTwitterUsernameKey = @"twitterUsername";
     }];
 }
 
-#pragma mark - UIActionSheet delegate
+- (void)fetchDetailsForTwitterSession {
 
-- (void)actionSheet:(UIActionSheet *)actionSheet clickedButtonAtIndex:(NSInteger)buttonIndex {
-    ACAccountType *twitterAccountType = [_accountStore accountTypeWithAccountTypeIdentifier:
-                                         ACAccountTypeIdentifierTwitter];
-    
-    NSArray *systemTwitterAccounts = [_accountStore accountsWithAccountType:twitterAccountType];
-    
-    if (buttonIndex >= [systemTwitterAccounts count]) {
-        [self completeAuthProcessWithAccount:nil
-                                 profileInfo:nil
-                                       error:HIPSocialAuthErrorCancelled];
-        
-        return;
-    }
-    
-    [self generateTokenForTwitterAccount:[systemTwitterAccounts objectAtIndex:buttonIndex]];
+    [[[Twitter sharedInstance] APIClient]
+     loadUserWithID:_twitterSession.userID
+     completion:^(TWTRUser *user, NSError *error) {
+         if (user) {
+             HIPSocialAccount *account = [HIPSocialAccount accountWithType:HIPSocialAccountTypeTwitter
+                                                                identifier:user.userID];
+             
+             NSDictionary *profileInfo = @{@"name": user.name,
+                                           @"screen_name": user.screenName,
+                                           @"profile_image_url": user.profileImageURL};
+
+             [self completeAuthProcessWithAccount:account
+                                      profileInfo:profileInfo
+                                            error:HIPSocialAuthErrorNone];
+
+         } else {
+             [self removeAccountOfType:HIPSocialAccountTypeTwitter];
+             
+             [self completeAuthProcessWithAccount:nil
+                                      profileInfo:nil
+                                            error:HIPSocialAuthErrorAuthenticationFailed];
+         }
+     }];
 }
 
 #pragma mark - Completion
@@ -626,7 +444,9 @@ static NSString * const HIPSocialAuthTwitterUsernameKey = @"twitterUsername";
             [prefs removeObjectForKey:HIPSocialAuthTwitterSecretKey];
             [prefs removeObjectForKey:HIPSocialAuthTwitterUsernameKey];
             
-            _twitterAccount = nil;
+            _twitterSession = nil;
+            
+            [[Twitter sharedInstance] logOut];
             break;
         }
         case HIPSocialAccountTypeFacebook: {
@@ -651,7 +471,9 @@ static NSString * const HIPSocialAuthTwitterUsernameKey = @"twitterUsername";
     
     [[FBSession activeSession] closeAndClearTokenInformation];
     
-    _twitterAccount = nil;
+    _twitterSession = nil;
+    
+    [[Twitter sharedInstance] logOut];
 }
 
 @end

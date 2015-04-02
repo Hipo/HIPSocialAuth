@@ -7,7 +7,7 @@
 
 #import <Accounts/Accounts.h>
 #import <FacebookSDK/FacebookSDK.h>
-#import <Twitter/Twitter.h>
+#import <TwitterKit/TwitterKit.h>
 
 #import "HIPSocialAccount.h"
 
@@ -27,7 +27,7 @@ typedef enum {
 
 @interface HIPSocialAuthManager : NSObject
 
-@property (nonatomic, retain, readonly) ACAccount *twitterAccount;
+@property (nonatomic, retain, readonly) TWTRSession *twitterSession;
 @property (nonatomic, copy, readonly) NSString *facebookSchemeSuffix;
 
 + (HIPSocialAuthManager *)sharedManager;

@@ -51,21 +51,11 @@ Copy and include the `HIPSocialAuth` directory in your own project. There are so
 Dependencies
 ------------
 
-Project comes bundled with the following dependencies:
+Project depends on the official Facebook and Twitter SDKs to work properly. You 
+can download and include them in your project from these links:
 
-* ABOAuthCore
-* TWAPIManager
-
-And it depends on the Facebook SDK to work properly. You can download it and 
-include it in your project from https://developers.facebook.com/ios/
-
-Required system frameworks are:
-
-* libsqlite3.dylib
-* AdSupport.framework
-* Accounts.framework
-* Twitter.framework
-* Social.framework
+* https://developers.facebook.com/ios/
+* https://dev.twitter.com/twitter-kit/ios
 
 If you find any issues, please open an issue here on GitHub, and feel free to send in pull requests with improvements and fixes. You can also get in touch
 by emailing us at hello@hipolabs.com.
